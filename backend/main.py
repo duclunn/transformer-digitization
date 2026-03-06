@@ -15,12 +15,38 @@ if _db_path:
     # The models.Base.metadata.create_all(bind=engine) will create role_permissions.
     _conn = sqlite3.connect(_db_path)
     _cursor = _conn.cursor()
-    # Check and add design_file column if missing
+    # Check and add columns to sales_orders
     _cursor.execute("PRAGMA table_info(sales_orders)")
     _cols = [row[1] for row in _cursor.fetchall()]
     if "design_file" not in _cols:
         _cursor.execute("ALTER TABLE sales_orders ADD COLUMN design_file TEXT")
         print("Migration: added design_file column to sales_orders")
+    if "customer_code" not in _cols:
+        _cursor.execute("ALTER TABLE sales_orders ADD COLUMN customer_code VARCHAR(50)")
+        print("Migration: added customer_code to sales_orders")
+    if "model_name" not in _cols:
+        _cursor.execute("ALTER TABLE sales_orders ADD COLUMN model_name VARCHAR(255)")
+        print("Migration: added model_name to sales_orders")
+
+    # Check and add columns to users
+    _cursor.execute("PRAGMA table_info(users)")
+    _user_cols = [row[1] for row in _cursor.fetchall()]
+    if "last_active_at" not in _user_cols:
+        _cursor.execute("ALTER TABLE users ADD COLUMN last_active_at DATETIME")
+        print("Migration: added last_active_at to users")
+
+    # Check and add columns to materials
+    # materials might not exist yet if the server never started, but PRAGMA won't fail
+    _cursor.execute("PRAGMA table_info(materials)")
+    _mat_cols = [row[1] for row in _cursor.fetchall()]
+    if _mat_cols:
+        if "old_code" not in _mat_cols:
+            _cursor.execute("ALTER TABLE materials ADD COLUMN old_code VARCHAR(100)")
+            print("Migration: added old_code to materials")
+        if "material_type" not in _mat_cols:
+            _cursor.execute("ALTER TABLE materials ADD COLUMN material_type VARCHAR(100)")
+            print("Migration: added material_type to materials")
+
     _conn.commit()
     _conn.close()
 
@@ -28,7 +54,7 @@ app = FastAPI(title="Transformer Production Digitization API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict this
+    allow_origin_regex=".*", # Bounces back exact Origin to satisfy browser credential requirements
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -14,6 +14,7 @@ class User(Base):
     hashed_password = Column(String(100))
     role = Column(String(50)) # e.g., 'admin', 'sales', 'production', 'planning', 'technical'
     department = Column(String(50))
+    last_active_at = Column(DateTime, nullable=True)
 
 class RolePermission(Base):
     __tablename__ = "role_permissions"
@@ -42,7 +43,9 @@ class SalesOrder(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(String(100), unique=True, index=True)
     customer_name = Column(String(255))
+    customer_code = Column(String(50), nullable=True)
     transformer_model = Column(String(100))
+    model_name = Column(String(255), nullable=True)
     quantity = Column(Integer)
     status = Column(String(50)) # 'pending', 'in_production', 'delivered'
     order_date = Column(DateTime)
@@ -110,9 +113,11 @@ class Material(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     material_code = Column(String(100), unique=True, index=True)
+    old_code = Column(String(100), nullable=True)
     name = Column(String(255))
     description = Column(Text, nullable=True)
     unit = Column(String(50)) # e.g., kg, unit, liter
+    material_type = Column(String(100), nullable=True)
     stock_quantity = Column(Float, default=0.0)
 
 class BillOfMaterial(Base):

@@ -11,6 +11,7 @@ import StagesManagement from './pages/StagesManagement';
 import ProcessEditor from './pages/ProcessEditor';
 import Invoices from './pages/Invoices';
 import MaterialRequests from './pages/MaterialRequests';
+import MaterialCodes from './pages/MaterialCodes';
 import Traceability from './pages/Traceability';
 import Analytics from './pages/Analytics';
 import PlanningDashboard from './pages/PlanningDashboard';
@@ -35,6 +36,7 @@ function App() {
               <Route path="orders" element={<Orders />} />
               <Route path="inventory" element={<InventoryManagement />} />
               <Route path="bom" element={<BomManagement />} />
+              <Route path="materials" element={<MaterialCodes />} />
               <Route path="stages" element={<StagesManagement />} />
               <Route path="process-editor" element={<ProcessEditor />} />
               <Route path="invoices" element={<Invoices />} />

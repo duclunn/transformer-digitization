@@ -18,10 +18,21 @@ router = APIRouter(
 # --- Schemas ---
 class MaterialBase(BaseModel):
     material_code: str
+    old_code: Optional[str] = None
     name: str
     description: Optional[str] = None
     unit: str
+    material_type: Optional[str] = None
     stock_quantity: float = 0.0
+
+class MaterialUpdate(BaseModel):
+    material_code: Optional[str] = None
+    old_code: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    unit: Optional[str] = None
+    material_type: Optional[str] = None
+    stock_quantity: Optional[float] = None
 
 class MaterialCreate(MaterialBase):
     pass
@@ -64,6 +75,90 @@ def create_material(payload: MaterialCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_material)
     return new_material
+
+@router.put("/materials/{material_id}", response_model=MaterialResponse)
+def update_material(material_id: int, payload: MaterialUpdate, db: Session = Depends(get_db)):
+    """Update an existing material."""
+    material = db.query(models.Material).filter(models.Material.id == material_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    
+    update_data = payload.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        if value is not None:
+            setattr(material, key, value)
+    db.commit()
+    db.refresh(material)
+    return material
+
+@router.delete("/materials/{material_id}")
+def delete_material(material_id: int, db: Session = Depends(get_db)):
+    """Delete a raw material."""
+    material = db.query(models.Material).filter(models.Material.id == material_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    db.delete(material)
+    db.commit()
+    return {"status": "deleted"}
+
+@router.post("/materials/upload")
+async def upload_materials_excel(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Upload an Excel/CSV file to bulk create/update Material entries."""
+    if not file.filename.endswith(('.xlsx', '.csv', '.xls')):
+        raise HTTPException(status_code=400, detail="Invalid file type. Please upload Excel or CSV.")
+    
+    contents = await file.read()
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+            
+        cols = {str(c).strip().lower(): str(c) for c in df.columns}
+        
+        # Expected column mappings for Material
+        code_col = next((c for k, c in cols.items() if 'code' in k or 'mã vật tư' in k or 'mã' in k and 'old' not in k and 'cũ' not in k), None)
+        old_code_col = next((c for k, c in cols.items() if 'old code' in k or 'mã cũ' in k), None)
+        name_col = next((c for k, c in cols.items() if 'tên vật tư' in k or 'name' in k or 'tên' in k), None)
+        unit_col = next((c for k, c in cols.items() if 'đvt' in k or 'đơn vị' in k or 'unit' in k), None)
+        type_col = next((c for k, c in cols.items() if 'type' in k or 'loại' in k), None)
+        
+        if not code_col or not name_col:
+            raise ValueError("Excel file must contain 'Code' (Mã vật tư) and 'Name' (Tên vật tư) columns.")
+            
+        success_count = 0
+        df = df.fillna('')
+        
+        for index, row in df.iterrows():
+            code = str(row[code_col]).strip()
+            name = str(row[name_col]).strip()
+            if not code or not name: 
+                continue
+            
+            existing = db.query(models.Material).filter(models.Material.material_code == code).first()
+            if existing:
+                if old_code_col and row[old_code_col]: existing.old_code = str(row[old_code_col])
+                existing.name = name
+                if unit_col and row[unit_col]: existing.unit = str(row[unit_col])
+                if type_col and row[type_col]: existing.material_type = str(row[type_col])
+            else:
+                new_mat = models.Material(
+                    material_code=code,
+                    old_code=str(row[old_code_col]) if old_code_col else None,
+                    name=name,
+                    unit=str(row[unit_col]) if unit_col else "kg",
+                    material_type=str(row[type_col]) if type_col else None,
+                    stock_quantity=0.0
+                )
+                db.add(new_mat)
+            success_count += 1
+            
+        db.commit()
+        return {"message": f"Successfully processed {success_count} materials.", "count": success_count}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/equipment", response_model=List[EquipmentResponse])
 def get_equipment(db: Session = Depends(get_db)):

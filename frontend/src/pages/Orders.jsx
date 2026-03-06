@@ -20,7 +20,17 @@ const modalStyle = {
 
 const shrink = { shrink: true };
 
-const emptyRow = () => ({ order_id: '', customer_name: '', transformer_model: '', quantity: 1, order_date: new Date().toISOString().split('T')[0], deadline_date: '', requirement_file: null });
+const emptyRow = () => ({
+    order_id: '',
+    customer_code: '',
+    customer_name: '',
+    transformer_model: '',
+    model_name: '',
+    quantity: 1,
+    order_date: new Date().toISOString().split('T')[0],
+    deadline_date: '',
+    requirement_file: null
+});
 
 export default function Orders() {
     const [orders, setOrders] = useState([]);
@@ -44,16 +54,60 @@ export default function Orders() {
         } catch (err) { console.error("Failed to fetch data", err); }
     };
 
+    // --- Stable STT Calculation ---
+    // Sort all raw orders by date ascending to assign a permanent STT index
+    const ordersWithStt = useMemo(() => {
+        const sortedByDate = [...orders].sort((a, b) => new Date(a.order_date) - new Date(b.order_date));
+        return sortedByDate.map((o, index) => ({ ...o, stt: index + 1 }));
+    }, [orders]);
+
     // --- Suggestion lists ---
-    const customerSuggestions = useMemo(() => {
+    const customerNameSuggestions = useMemo(() => {
         const fromCustomers = customers.map(c => c.name);
         const fromOrders = orders.map(o => o.customer_name);
         return [...new Set([...fromCustomers, ...fromOrders])].filter(Boolean);
     }, [customers, orders]);
 
-    const modelSuggestions = useMemo(() => {
+    const customerCodeSuggestions = useMemo(() => {
+        const fromCustomers = customers.map(c => c.customer_code);
+        const fromOrders = orders.map(o => o.customer_code);
+        return [...new Set([...fromCustomers, ...fromOrders])].filter(Boolean);
+    }, [customers, orders]);
+
+    const modelCodeSuggestions = useMemo(() => {
         return [...new Set(orders.map(o => o.transformer_model))].filter(Boolean);
     }, [orders]);
+
+    const modelNameSuggestions = useMemo(() => {
+        return [...new Set(orders.map(o => o.model_name))].filter(Boolean);
+    }, [orders]);
+
+    // --- Auto-fill logic for creation ---
+    const handleCustomerChange = (idx, field, value) => {
+        const updated = [...orderRows];
+        updated[idx][field] = value || '';
+        if (field === 'customer_code' && value) {
+            const match = customers.find(c => c.customer_code === value) || orders.find(o => o.customer_code === value);
+            if (match && match.name) updated[idx].customer_name = match.name;
+        } else if (field === 'customer_name' && value) {
+            const match = customers.find(c => c.name === value) || orders.find(o => o.customer_name === value);
+            if (match && match.customer_code) updated[idx].customer_code = match.customer_code;
+        }
+        setOrderRows(updated);
+    };
+
+    const handleModelChange = (idx, field, value) => {
+        const updated = [...orderRows];
+        updated[idx][field] = value || '';
+        if (field === 'transformer_model' && value) {
+            const match = orders.find(o => o.transformer_model === value && o.model_name);
+            if (match) updated[idx].model_name = match.model_name;
+        } else if (field === 'model_name' && value) {
+            const match = orders.find(o => o.model_name === value && o.transformer_model);
+            if (match) updated[idx].transformer_model = match.transformer_model;
+        }
+        setOrderRows(updated);
+    };
 
     // --- Create multiple orders ---
     const handleAddRow = () => setOrderRows([...orderRows, emptyRow()]);
@@ -92,8 +146,10 @@ export default function Orders() {
         setEditForm({
             original_order_id: order.order_id,
             order_id: order.order_id,
-            customer_name: order.customer_name,
-            transformer_model: order.transformer_model,
+            customer_code: order.customer_code || '',
+            customer_name: order.customer_name || '',
+            transformer_model: order.transformer_model || '',
+            model_name: order.model_name || '',
             quantity: order.quantity,
             order_date: order.order_date ? new Date(order.order_date).toISOString().split('T')[0] : '',
             deadline_date: order.deadline_date ? new Date(order.deadline_date).toISOString().split('T')[0] : '',
@@ -104,13 +160,43 @@ export default function Orders() {
         setOpenEditModal(true);
     };
 
+    const handleEditCustomerChange = (field, value) => {
+        setEditForm(prev => {
+            const updated = { ...prev, [field]: value || '' };
+            if (field === 'customer_code' && value) {
+                const match = customers.find(c => c.customer_code === value) || orders.find(o => o.customer_code === value);
+                if (match && match.name) updated.customer_name = match.name;
+            } else if (field === 'customer_name' && value) {
+                const match = customers.find(c => c.name === value) || orders.find(o => o.customer_name === value);
+                if (match && match.customer_code) updated.customer_code = match.customer_code;
+            }
+            return updated;
+        });
+    };
+
+    const handleEditModelChange = (field, value) => {
+        setEditForm(prev => {
+            const updated = { ...prev, [field]: value || '' };
+            if (field === 'transformer_model' && value) {
+                const match = orders.find(o => o.transformer_model === value && o.model_name);
+                if (match) updated.model_name = match.model_name;
+            } else if (field === 'model_name' && value) {
+                const match = orders.find(o => o.model_name === value && o.transformer_model);
+                if (match) updated.transformer_model = match.transformer_model;
+            }
+            return updated;
+        });
+    };
+
     const handleEditOrder = async (e) => {
         e.preventDefault();
         try {
             await api.put(`/api/sales/orders/${editForm.original_order_id}`, {
                 order_id: editForm.order_id,
+                customer_code: editForm.customer_code,
                 customer_name: editForm.customer_name,
                 transformer_model: editForm.transformer_model,
+                model_name: editForm.model_name,
                 quantity: editForm.quantity,
                 order_date: new Date(editForm.order_date).toISOString(),
                 deadline_date: new Date(editForm.deadline_date).toISOString(),
@@ -155,7 +241,7 @@ export default function Orders() {
         setOrderDirection(isAscending ? 'desc' : 'asc');
         setValueToOrderBy(property);
     };
-    const sortedOrders = [...orders].sort((a, b) => {
+    const sortedOrders = [...ordersWithStt].sort((a, b) => {
         if (a[valueToOrderBy] < b[valueToOrderBy]) return orderDirection === 'asc' ? -1 : 1;
         if (a[valueToOrderBy] > b[valueToOrderBy]) return orderDirection === 'asc' ? 1 : -1;
         return 0;
@@ -186,9 +272,12 @@ export default function Orders() {
                     <Table size="small">
                         <TableHead sx={{ bgcolor: 'grey.100' }}>
                             <TableRow>
+                                <SortableHeader field="stt" label="STT" />
                                 <SortableHeader field="order_id" label="Order ID" />
-                                <SortableHeader field="customer_name" label="Customer" />
-                                <SortableHeader field="transformer_model" label="Model" />
+                                <SortableHeader field="customer_code" label="Mã KH" />
+                                <SortableHeader field="customer_name" label="Tên KH" />
+                                <SortableHeader field="transformer_model" label="Mã SP" />
+                                <SortableHeader field="model_name" label="Tên SP" />
                                 <SortableHeader field="quantity" label="Qty" />
                                 <SortableHeader field="order_date" label="Date" />
                                 <SortableHeader field="deadline_date" label="Deadline" />
@@ -200,9 +289,12 @@ export default function Orders() {
                         <TableBody>
                             {sortedOrders.map(o => (
                                 <TableRow key={o.id}>
+                                    <TableCell>{o.stt}</TableCell>
                                     <TableCell sx={{ fontWeight: 600 }}>{o.order_id}</TableCell>
+                                    <TableCell>{o.customer_code || '—'}</TableCell>
                                     <TableCell>{o.customer_name}</TableCell>
                                     <TableCell>{o.transformer_model}</TableCell>
+                                    <TableCell>{o.model_name || '—'}</TableCell>
                                     <TableCell>{o.quantity}</TableCell>
                                     <TableCell>{new Date(o.order_date).toLocaleDateString('en-GB')}</TableCell>
                                     <TableCell>{o.deadline_date ? new Date(o.deadline_date).toLocaleDateString('en-GB') : '—'}</TableCell>
@@ -251,19 +343,35 @@ export default function Orders() {
                                 <TextField size="small" required label="Order ID*" InputLabelProps={shrink} value={row.order_id} onChange={e => updateRow(idx, 'order_id', e.target.value)} sx={{ width: 120 }} />
                                 <Autocomplete
                                     freeSolo
-                                    options={customerSuggestions}
-                                    value={row.customer_name}
-                                    onInputChange={(_, val) => updateRow(idx, 'customer_name', val)}
-                                    renderInput={(params) => <TextField {...params} size="small" required label="Customer Name*" InputLabelProps={shrink} />}
-                                    sx={{ width: 160 }}
+                                    options={customerCodeSuggestions}
+                                    value={row.customer_code}
+                                    onInputChange={(_, val) => handleCustomerChange(idx, 'customer_code', val)}
+                                    renderInput={(params) => <TextField {...params} size="small" placeholder="Mã KH" label="Mã KH" InputLabelProps={shrink} />}
+                                    sx={{ width: 140 }}
                                 />
                                 <Autocomplete
                                     freeSolo
-                                    options={modelSuggestions}
+                                    options={customerNameSuggestions}
+                                    value={row.customer_name}
+                                    onInputChange={(_, val) => handleCustomerChange(idx, 'customer_name', val)}
+                                    renderInput={(params) => <TextField {...params} size="small" required label="Tên KH*" InputLabelProps={shrink} />}
+                                    sx={{ width: 180 }}
+                                />
+                                <Autocomplete
+                                    freeSolo
+                                    options={modelCodeSuggestions}
                                     value={row.transformer_model}
-                                    onInputChange={(_, val) => updateRow(idx, 'transformer_model', val)}
-                                    renderInput={(params) => <TextField {...params} size="small" required label="Transformer Model*" InputLabelProps={shrink} />}
-                                    sx={{ width: 170 }}
+                                    onInputChange={(_, val) => handleModelChange(idx, 'transformer_model', val)}
+                                    renderInput={(params) => <TextField {...params} size="small" required label="Mã Sp*" InputLabelProps={shrink} />}
+                                    sx={{ width: 140 }}
+                                />
+                                <Autocomplete
+                                    freeSolo
+                                    options={modelNameSuggestions}
+                                    value={row.model_name}
+                                    onInputChange={(_, val) => handleModelChange(idx, 'model_name', val)}
+                                    renderInput={(params) => <TextField {...params} size="small" placeholder="Tên SP" label="Tên SP" InputLabelProps={shrink} />}
+                                    sx={{ width: 180 }}
                                 />
                                 <TextField size="small" required type="number" label="Quantity*" InputLabelProps={shrink} value={row.quantity} onChange={e => updateRow(idx, 'quantity', parseInt(e.target.value) || 1)} sx={{ width: 90 }} />
                                 <TextField size="small" required type="date" label="Order Date*" InputLabelProps={shrink} value={row.order_date} onChange={e => updateRow(idx, 'order_date', e.target.value)} sx={{ width: 140 }} />
@@ -302,19 +410,35 @@ export default function Orders() {
                                 <TextField size="small" required label="Order ID*" InputLabelProps={shrink} value={editForm.order_id} onChange={e => setEditForm({ ...editForm, order_id: e.target.value })} sx={{ width: 120 }} />
                                 <Autocomplete
                                     freeSolo
-                                    options={customerSuggestions}
-                                    value={editForm.customer_name}
-                                    onInputChange={(_, val) => setEditForm({ ...editForm, customer_name: val })}
-                                    renderInput={(params) => <TextField {...params} size="small" required label="Customer Name*" InputLabelProps={shrink} />}
-                                    sx={{ width: 200 }}
+                                    options={customerCodeSuggestions}
+                                    value={editForm.customer_code}
+                                    onInputChange={(_, val) => handleEditCustomerChange('customer_code', val)}
+                                    renderInput={(params) => <TextField {...params} size="small" placeholder="Mã KH" label="Mã KH" InputLabelProps={shrink} />}
+                                    sx={{ width: 140 }}
                                 />
                                 <Autocomplete
                                     freeSolo
-                                    options={modelSuggestions}
+                                    options={customerNameSuggestions}
+                                    value={editForm.customer_name}
+                                    onInputChange={(_, val) => handleEditCustomerChange('customer_name', val)}
+                                    renderInput={(params) => <TextField {...params} size="small" required label="Tên KH*" InputLabelProps={shrink} />}
+                                    sx={{ width: 220 }}
+                                />
+                                <Autocomplete
+                                    freeSolo
+                                    options={modelCodeSuggestions}
                                     value={editForm.transformer_model}
-                                    onInputChange={(_, val) => setEditForm({ ...editForm, transformer_model: val })}
-                                    renderInput={(params) => <TextField {...params} size="small" required label="Transformer Model*" InputLabelProps={shrink} />}
-                                    sx={{ width: 200 }}
+                                    onInputChange={(_, val) => handleEditModelChange('transformer_model', val)}
+                                    renderInput={(params) => <TextField {...params} size="small" required label="Mã SP*" InputLabelProps={shrink} />}
+                                    sx={{ width: 150 }}
+                                />
+                                <Autocomplete
+                                    freeSolo
+                                    options={modelNameSuggestions}
+                                    value={editForm.model_name}
+                                    onInputChange={(_, val) => handleEditModelChange('model_name', val)}
+                                    renderInput={(params) => <TextField {...params} size="small" placeholder="Tên SP" label="Tên SP" InputLabelProps={shrink} />}
+                                    sx={{ width: 220 }}
                                 />
                                 <TextField size="small" required type="number" label="Quantity*" InputLabelProps={shrink} value={editForm.quantity} onChange={e => setEditForm({ ...editForm, quantity: parseInt(e.target.value) || 1 })} sx={{ width: 100 }} />
                                 <TextField size="small" required type="date" label="Order Date*" InputLabelProps={shrink} value={editForm.order_date} onChange={e => setEditForm({ ...editForm, order_date: e.target.value })} sx={{ width: 150 }} />

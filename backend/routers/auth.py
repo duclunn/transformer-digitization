@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from auth import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user, get_password_hash
-from datetime import timedelta
+from datetime import timedelta, datetime
 from pydantic import BaseModel
 from typing import Optional
 
@@ -49,7 +49,8 @@ def login_for_access_token(response: Response, form_data: OAuth2PasswordRequestF
         key="access_token",
         value=f"Bearer {access_token}",
         httponly=True,
-        samesite="lax", # Change to "none" and secure=True in production if cross-origin
+        samesite="none",
+        secure=True,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
     
@@ -57,8 +58,15 @@ def login_for_access_token(response: Response, form_data: OAuth2PasswordRequestF
 
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie(key="access_token", httponly=True, samesite="lax")
+    response.delete_cookie(key="access_token", httponly=True, samesite="none", secure=True)
     return {"message": "Logged out successfully"}
+
+@router.get("/ping")
+def update_activity(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Silent background ping to update last_active_at"""
+    current_user.last_active_at = datetime.utcnow()
+    db.commit()
+    return {"status": "ok"}
 
 @router.get("/users")
 def list_users(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -67,7 +75,7 @@ def list_users(db: Session = Depends(get_db), current_user: models.User = Depend
     
     users = db.query(models.User).all()
     # Remove hashed passwords from response
-    return [{"id": u.id, "username": u.username, "name": u.name, "email": u.email, "role": u.role, "department": u.department} for u in users]
+    return [{"id": u.id, "username": u.username, "name": u.name, "email": u.email, "role": u.role, "department": u.department, "last_active_at": u.last_active_at} for u in users]
 
 @router.post("/users")
 def create_user(user_data: UserCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

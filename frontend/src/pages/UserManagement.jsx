@@ -11,6 +11,15 @@ import api from '../services/api';
 const ROLES = ['admin', 'sales', 'technical', 'production', 'planning'];
 const DEPARTMENTS = ['Admin', 'Sales', 'Technical', 'Production', 'Planning'];
 
+// Helper to check if a user is online (active within last 2 minutes)
+// We append 'Z' to ensure JS parses the naive UTC timestamp correctly
+const isOnline = (lastActiveAt) => {
+    if (!lastActiveAt) return false;
+    const lastActive = new Date(lastActiveAt + 'Z').getTime();
+    const now = new Date().getTime();
+    return (now - lastActive) < 120000; // 2 minutes in ms
+};
+
 export default function UserManagement() {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -142,6 +151,7 @@ export default function UserManagement() {
                 <Table>
                     <TableHead sx={{ bgcolor: 'grey.100' }}>
                         <TableRow>
+                            <TableCell sx={{ fontWeight: 600 }}>Trạng thái</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Tên đăng nhập</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Họ và tên</TableCell>
                             <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
@@ -151,40 +161,55 @@ export default function UserManagement() {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {users.map((user) => (
-                            <TableRow key={user.id} hover>
-                                <TableCell>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <UserIcon size={16} />
-                                        {user.username}
-                                        {me?.id === user.id && <Chip label="Bạn" size="small" color="primary" variant="outlined" sx={{ ml: 1 }} />}
-                                    </Box>
-                                </TableCell>
-                                <TableCell>{user.name}</TableCell>
-                                <TableCell>{user.email || '—'}</TableCell>
-                                <TableCell>
-                                    <Chip
-                                        label={user.role}
-                                        size="small"
-                                        color={user.role === 'admin' ? 'secondary' : 'default'}
-                                    />
-                                </TableCell>
-                                <TableCell>{user.department}</TableCell>
-                                <TableCell align="right">
-                                    <IconButton size="small" color="primary" onClick={() => handleOpenModal(user)} sx={{ mr: 1 }}>
-                                        <Edit size={18} />
-                                    </IconButton>
-                                    <IconButton
-                                        size="small"
-                                        color="error"
-                                        onClick={() => handleDelete(user.id)}
-                                        disabled={me?.id === user.id}
-                                    >
-                                        <Trash2 size={18} />
-                                    </IconButton>
-                                </TableCell>
-                            </TableRow>
-                        ))}
+                        {users.map((user) => {
+                            const online = isOnline(user.last_active_at);
+                            return (
+                                <TableRow key={user.id} hover>
+                                    <TableCell>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <Box sx={{
+                                                width: 10, height: 10, borderRadius: '50%',
+                                                bgcolor: online ? 'success.main' : 'grey.400',
+                                                boxShadow: online ? '0 0 5px #4caf50' : 'none'
+                                            }} />
+                                            <Typography variant="body2" color={online ? 'success.main' : 'text.secondary'}>
+                                                {online ? 'Online' : 'Offline'}
+                                            </Typography>
+                                        </Box>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                            <UserIcon size={16} />
+                                            {user.username}
+                                            {me?.id === user.id && <Chip label="Bạn" size="small" color="primary" variant="outlined" sx={{ ml: 1 }} />}
+                                        </Box>
+                                    </TableCell>
+                                    <TableCell>{user.name}</TableCell>
+                                    <TableCell>{user.email || '—'}</TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            label={user.role}
+                                            size="small"
+                                            color={user.role === 'admin' ? 'secondary' : 'default'}
+                                        />
+                                    </TableCell>
+                                    <TableCell>{user.department}</TableCell>
+                                    <TableCell align="right">
+                                        <IconButton size="small" color="primary" onClick={() => handleOpenModal(user)} sx={{ mr: 1 }}>
+                                            <Edit size={18} />
+                                        </IconButton>
+                                        <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() => handleDelete(user.id)}
+                                            disabled={me?.id === user.id}
+                                        >
+                                            <Trash2 size={18} />
+                                        </IconButton>
+                                    </TableCell>
+                                </TableRow>
+                            );
+                        })}
                     </TableBody>
                 </Table>
             </TableContainer>

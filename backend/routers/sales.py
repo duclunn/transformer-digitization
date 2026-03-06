@@ -58,7 +58,9 @@ class CustomerUpdate(BaseModel):
 class SalesOrderBase(BaseModel):
     order_id: str
     customer_name: str
+    customer_code: Optional[str] = None
     transformer_model: str
+    model_name: Optional[str] = None
     quantity: int
     status: str = "pending"
     deadline_date: Optional[datetime] = None
@@ -72,7 +74,9 @@ class SalesOrderCreate(SalesOrderBase):
 class SalesOrderUpdate(BaseModel):
     order_id: Optional[str] = None
     customer_name: Optional[str] = None
+    customer_code: Optional[str] = None
     transformer_model: Optional[str] = None
+    model_name: Optional[str] = None
     quantity: Optional[int] = None
     order_date: Optional[datetime] = None
     deadline_date: Optional[datetime] = None
@@ -170,17 +174,25 @@ def create_sales_order(payload: SalesOrderCreate, db: Session = Depends(get_db))
     # Auto-add customer to customer list if not exists
     existing_customer = db.query(models.Customer).filter(models.Customer.name == payload.customer_name).first()
     if not existing_customer:
-        # Generate random distinct customer code
-        while True:
-            code = "C-" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-            if not db.query(models.Customer).filter(models.Customer.customer_code == code).first():
-                break
+        if payload.customer_code:
+            code = payload.customer_code
+        else:
+            # Generate random distinct customer code
+            while True:
+                code = "C-" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+                if not db.query(models.Customer).filter(models.Customer.customer_code == code).first():
+                    break
+            payload.customer_code = code
         new_customer = models.Customer(
             customer_code=code,
             name=payload.customer_name
         )
         db.add(new_customer)
         db.commit()
+    else:
+        # If customer already exists, optionally update their code or ensure the payload has the code
+        if not payload.customer_code:
+            payload.customer_code = existing_customer.customer_code
     
     new_order = models.SalesOrder(**payload.dict())
     db.add(new_order)

@@ -39,6 +39,7 @@ export default function Layout() {
             icon: <Database size={20} />,
             children: [
                 { text: 'Định mức NVL', path: '/bom' },
+                { text: 'Mã vật tư', path: '/materials' },
                 { text: 'Công đoạn', path: '/stages' },
                 { text: 'Quy trình', path: '/process-editor' },
                 { text: 'Năng lực thiết bị', path: '/inventory' },
@@ -86,6 +87,16 @@ export default function Layout() {
     // --- Role-Based Access Control (RBAC) ---
     const currentRole = activeRole || user?.role || 'user';
     const [allowedModules, setAllowedModules] = useState([]);
+
+    // --- Online Status Ping ---
+    useEffect(() => {
+        if (!user) return;
+        api.get('/api/auth/ping').catch(console.error);
+        const interval = setInterval(() => {
+            api.get('/api/auth/ping').catch(console.error);
+        }, 60000);
+        return () => clearInterval(interval);
+    }, [user]);
 
     useEffect(() => {
         const fetchPermissions = async () => {
