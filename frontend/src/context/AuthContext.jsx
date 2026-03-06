@@ -30,14 +30,19 @@ export const AuthProvider = ({ children }) => {
         formData.append('username', username);
         formData.append('password', password);
 
-        // This will set the HttpOnly cookie upon success
-        await api.post('/api/auth/token', formData, {
+        // Get the token from response body
+        const res = await api.post('/api/auth/token', formData, {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
         });
 
-        // Fetch full user details using the newly set cookie
+        // Save token to localStorage for the Bearer interceptor
+        if (res.data && res.data.access_token) {
+            localStorage.setItem('access_token', res.data.access_token);
+        }
+
+        // Fetch full user details using the newly set token
         const userRes = await api.get('/api/auth/me');
         setUser(userRes.data);
         setActiveRole(userRes.data.role);
@@ -50,6 +55,7 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             console.error('Logout failed:', error);
         } finally {
+            localStorage.removeItem('access_token');
             setUser(null);
             setActiveRole(null);
         }
