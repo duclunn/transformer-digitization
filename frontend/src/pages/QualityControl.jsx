@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
     Container, Typography, Paper, Table, TableBody, TableCell,
-    TableContainer, TableHead, TableRow, Button, Box, Alert, CircularProgress
+    TableContainer, TableHead, TableRow, Button, Box, Alert, CircularProgress,
+    TextField, InputAdornment, Dialog, DialogTitle, DialogContent, DialogActions, IconButton
 } from '@mui/material';
+import { Search as SearchIcon, X, Download } from 'lucide-react';
 import api from '../services/api';
 
 // Helper component to render a single QC document button
-const QCButton = ({ label, docType, orderId, filePath, onUploadSuccess }) => {
+const QCButton = ({ label, docType, orderId, filePath, onUploadSuccess, onPreview }) => {
     const [uploading, setUploading] = useState(false);
 
     const handleFileUpload = async (event) => {
@@ -50,14 +52,11 @@ const QCButton = ({ label, docType, orderId, filePath, onUploadSuccess }) => {
                 }
             }
 
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', fileName);
-            document.body.appendChild(link);
-            link.click();
-            link.parentNode.removeChild(link);
-            window.URL.revokeObjectURL(url);
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+
+            // Pass the generated blob URL and filename back to the parent component for preview
+            onPreview(url, fileName);
+
         } catch (error) {
             console.error("Download failed", error);
             alert("Lỗi tải file");
@@ -121,22 +120,71 @@ const QCButton = ({ label, docType, orderId, filePath, onUploadSuccess }) => {
 
 export default function QualityControl() {
     const [orders, setOrders] = useState([]);
+    const [filteredOrders, setFilteredOrders] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
+    // Preview Modal State
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [previewFileName, setPreviewFileName] = useState('');
 
     useEffect(() => {
         fetchOrders();
     }, []);
 
+    // Filter local array whenever search query changes
+    useEffect(() => {
+        if (!searchQuery) {
+            setFilteredOrders(orders);
+        } else {
+            const lowerQuery = searchQuery.toLowerCase();
+            const filtered = orders.filter(order =>
+                order.order_id && order.order_id.toLowerCase().includes(lowerQuery)
+            );
+            setFilteredOrders(filtered);
+        }
+    }, [searchQuery, orders]);
+
     const fetchOrders = async () => {
         try {
             const response = await api.get('/api/sales/orders');
             setOrders(response.data);
+            setFilteredOrders(response.data);
             setLoading(false);
         } catch (err) {
             setError('Failed to fetch sales orders');
             setLoading(false);
         }
+    };
+
+    const openPreview = (url, fileName) => {
+        setPreviewUrl(url);
+        setPreviewFileName(fileName);
+        setPreviewOpen(true);
+    };
+
+    const closePreview = () => {
+        setPreviewOpen(false);
+        // We delay revoking the URL slightly so the modal fade-out looks smooth
+        setTimeout(() => {
+            if (previewUrl) {
+                window.URL.revokeObjectURL(previewUrl);
+                setPreviewUrl(null);
+                setPreviewFileName('');
+            }
+        }, 300);
+    };
+
+    const downloadActivePreview = () => {
+        if (!previewUrl) return;
+        const link = document.createElement('a');
+        link.href = previewUrl;
+        link.setAttribute('download', previewFileName);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
     };
 
     if (loading) return <Container sx={{ mt: 4 }}><CircularProgress /></Container>;
@@ -147,6 +195,22 @@ export default function QualityControl() {
                 <Typography variant="h4" fontWeight={700} color="primary.dark">
                     Quản lý chất lượng
                 </Typography>
+
+                <TextField
+                    placeholder="Tìm kiếm mã đơn hàng..."
+                    variant="outlined"
+                    size="small"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    sx={{ width: 300, bgcolor: 'common.white', borderRadius: 1 }}
+                    InputProps={{
+                        startAdornment: (
+                            <InputAdornment position="start">
+                                <SearchIcon size={20} color="action" />
+                            </InputAdornment>
+                        ),
+                    }}
+                />
             </Box>
 
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -177,43 +241,95 @@ export default function QualityControl() {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {orders.map((order) => (
+                        {filteredOrders.map((order) => (
                             <TableRow key={order.order_id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
                                 <TableCell sx={{ fontWeight: 600, fontSize: '0.95rem', borderRight: '1px solid rgba(224, 224, 224, 1)' }}>
                                     {order.order_id}
                                 </TableCell>
 
                                 <TableCell align="center" sx={{ borderRight: '1px dashed rgba(224, 224, 224, 1)' }}>
-                                    <QCButton label="B1" docType="b1" orderId={order.order_id} filePath={order.qc_b1_file} onUploadSuccess={fetchOrders} />
+                                    <QCButton label="B1" docType="b1" orderId={order.order_id} filePath={order.qc_b1_file} onUploadSuccess={fetchOrders} onPreview={openPreview} />
                                 </TableCell>
 
                                 <TableCell align="center" sx={{ borderRight: '1px dashed rgba(224, 224, 224, 1)' }}>
-                                    <QCButton label="B2" docType="b2" orderId={order.order_id} filePath={order.qc_b2_file} onUploadSuccess={fetchOrders} />
+                                    <QCButton label="B2" docType="b2" orderId={order.order_id} filePath={order.qc_b2_file} onUploadSuccess={fetchOrders} onPreview={openPreview} />
                                 </TableCell>
 
                                 <TableCell align="center" sx={{ borderRight: '1px dashed rgba(224, 224, 224, 1)' }}>
-                                    <QCButton label="KCS" docType="kcs" orderId={order.order_id} filePath={order.qc_kcs_file} onUploadSuccess={fetchOrders} />
+                                    <QCButton label="KCS" docType="kcs" orderId={order.order_id} filePath={order.qc_kcs_file} onUploadSuccess={fetchOrders} onPreview={openPreview} />
                                 </TableCell>
 
                                 <TableCell align="center" sx={{ borderRight: '1px solid rgba(224, 224, 224, 1)' }}>
-                                    <QCButton label="Nghiệm thu" docType="nghiem_thu" orderId={order.order_id} filePath={order.qc_nghiem_thu_file} onUploadSuccess={fetchOrders} />
+                                    <QCButton label="Nghiệm thu" docType="nghiem_thu" orderId={order.order_id} filePath={order.qc_nghiem_thu_file} onUploadSuccess={fetchOrders} onPreview={openPreview} />
                                 </TableCell>
 
                                 <TableCell align="center">
-                                    <QCButton label="Kiểm tra xuất xưởng" docType="xuat_xuong" orderId={order.order_id} filePath={order.qc_xuat_xuong_file} onUploadSuccess={fetchOrders} />
+                                    <QCButton label="Kiểm tra xuất xưởng" docType="xuat_xuong" orderId={order.order_id} filePath={order.qc_xuat_xuong_file} onUploadSuccess={fetchOrders} onPreview={openPreview} />
                                 </TableCell>
                             </TableRow>
                         ))}
-                        {orders.length === 0 && (
+                        {filteredOrders.length === 0 && (
                             <TableRow>
                                 <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                                    Không có đơn hàng nào
+                                    {orders.length === 0 ? "Không có đơn hàng nào" : "Không tìm thấy đơn hàng phù hợp"}
                                 </TableCell>
                             </TableRow>
                         )}
                     </TableBody>
                 </Table>
             </TableContainer>
+
+            {/* Document Preview Modal */}
+            <Dialog
+                open={previewOpen}
+                onClose={closePreview}
+                maxWidth="lg"
+                fullWidth
+            >
+                <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+                    <Typography variant="h6" fontWeight={600}>
+                        {previewFileName}
+                    </Typography>
+                    <IconButton onClick={closePreview} size="small">
+                        <X size={24} />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent dividers sx={{ p: 0, height: '75vh', overflow: 'hidden' }}>
+                    {previewUrl ? (
+                        <object
+                            data={previewUrl}
+                            type="application/pdf"
+                            width="100%"
+                            height="100%"
+                        >
+                            <Box sx={{ p: 4, textAlign: 'center' }}>
+                                <Typography variant="body1" sx={{ mb: 2 }}>Trình duyệt của bạn không hỗ trợ xem trước PDF.</Typography>
+                                <Button variant="contained" onClick={downloadActivePreview}>
+                                    Tải file xuống
+                                </Button>
+                            </Box>
+                        </object>
+                    ) : (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                            <CircularProgress />
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions sx={{ p: 2, bgcolor: 'grey.50' }}>
+                    <Button onClick={closePreview} color="inherit">
+                        Đóng
+                    </Button>
+                    <Button
+                        onClick={downloadActivePreview}
+                        variant="contained"
+                        color="primary"
+                        startIcon={<Download size={18} />}
+                    >
+                        Tải Xuống
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
         </Container>
     );
 }
