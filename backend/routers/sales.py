@@ -19,6 +19,9 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 DESIGN_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "designs")
 os.makedirs(DESIGN_UPLOAD_DIR, exist_ok=True)
 
+QC_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "qc")
+os.makedirs(QC_DIR, exist_ok=True)
+
 router = APIRouter(
     prefix="/api/sales",
     tags=["Sales Management"],
@@ -66,6 +69,11 @@ class SalesOrderBase(BaseModel):
     deadline_date: Optional[datetime] = None
     requirement_file: Optional[str] = None
     design_file: Optional[str] = None
+    qc_b1_file: Optional[str] = None
+    qc_b2_file: Optional[str] = None
+    qc_kcs_file: Optional[str] = None
+    qc_nghiem_thu_file: Optional[str] = None
+    qc_xuat_xuong_file: Optional[str] = None
 
 class SalesOrderCreate(SalesOrderBase):
     order_date: datetime
@@ -157,6 +165,48 @@ def update_customer(customer_id: int, payload: CustomerUpdate, db: Session = Dep
     
     db.commit()
     return {"status": "updated"}
+
+# --- Quality Control Endpoints ---
+@router.post("/orders/{order_id}/qc-docs/{doc_type}")
+def upload_qc_document(order_id: str, doc_type: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Upload a QC document (b1, b2, kcs, nghiem_thu, xuat_xuong)."""
+    valid_types = ["b1", "b2", "kcs", "nghiem_thu", "xuat_xuong"]
+    if doc_type not in valid_types:
+        raise HTTPException(status_code=400, detail="Invalid doc_type")
+        
+    order = db.query(models.SalesOrder).filter(models.SalesOrder.order_id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    safe_filename = f"{order_id}_{doc_type}_{file.filename}"
+    file_path = os.path.join(QC_DIR, safe_filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    setattr(order, f"qc_{doc_type}_file", safe_filename)
+    db.commit()
+    return {"filename": safe_filename, "doc_type": doc_type}
+
+@router.get("/orders/{order_id}/qc-docs/{doc_type}")
+def get_qc_document(order_id: str, doc_type: str, db: Session = Depends(get_db)):
+    """Download a QC document."""
+    valid_types = ["b1", "b2", "kcs", "nghiem_thu", "xuat_xuong"]
+    if doc_type not in valid_types:
+        raise HTTPException(status_code=400, detail="Invalid doc_type")
+        
+    order = db.query(models.SalesOrder).filter(models.SalesOrder.order_id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    filename = getattr(order, f"qc_{doc_type}_file")
+    if not filename:
+        raise HTTPException(status_code=404, detail="File not found")
+        
+    file_path = os.path.join(QC_DIR, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File missing from disk")
+        
+    return FileResponse(file_path, filename=filename)
 
 # --- Sales Order Endpoints ---
 @router.get("/orders", response_model=List[SalesOrderResponse])

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Box, Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography, AppBar, Toolbar, Divider, Select, MenuItem, FormControl, Collapse } from '@mui/material';
-import { LayoutDashboard, FileSpreadsheet, LogOut, User as UserIcon, Database, ShoppingCart, CalendarDays, Factory, Search, BarChart2, ChevronDown, ChevronUp, Shield } from 'lucide-react';
+import { LayoutDashboard, FileSpreadsheet, LogOut, User as UserIcon, Database, ShoppingCart, CalendarDays, Factory, Search, BarChart2, ChevronDown, ChevronUp, Shield, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
@@ -81,6 +81,11 @@ export default function Layout() {
                 { text: 'Người dùng', path: '/users' },
                 { text: 'Phân quyền', path: '/roles' }
             ]
+        },
+        {
+            title: 'Quản lý chất lượng',
+            icon: <CheckCircle size={20} />,
+            path: '/qc'
         }
     ];
 
@@ -173,6 +178,7 @@ export default function Layout() {
                                         <MenuItem value="production">Production View</MenuItem>
                                         <MenuItem value="planning">Planning View</MenuItem>
                                         <MenuItem value="technical">Technical View</MenuItem>
+                                        <MenuItem value="qc">QC View</MenuItem>
                                     </Select>
                                 </FormControl>
                             )}

@@ -27,6 +27,13 @@ if _db_path:
     if "model_name" not in _cols:
         _cursor.execute("ALTER TABLE sales_orders ADD COLUMN model_name VARCHAR(255)")
         print("Migration: added model_name to sales_orders")
+    
+    # Phase 5 QC Migrations
+    qc_cols = ["qc_b1_file", "qc_b2_file", "qc_kcs_file", "qc_nghiem_thu_file", "qc_xuat_xuong_file"]
+    for qc_col in qc_cols:
+        if qc_col not in _cols:
+            _cursor.execute(f"ALTER TABLE sales_orders ADD COLUMN {qc_col} TEXT")
+            print(f"Migration: added {qc_col} to sales_orders")
 
     # Check and add columns to users
     _cursor.execute("PRAGMA table_info(users)")
@@ -122,6 +129,7 @@ def create_default_admin():
             {"username": "prod1",  "name": "Nhân viên SX",    "email": "prod1@havec.vn",  "role": "production", "department": "Production"},
             {"username": "plan1",  "name": "Nhân viên KH",    "email": "plan1@havec.vn",  "role": "planning", "department": "Planning"},
             {"username": "tech1",  "name": "Nhân viên KC",    "email": "tech1@havec.vn",  "role": "technical", "department": "Technical"},
+            {"username": "qc1",    "name": "Nhân viên QC",    "email": "qc1@havec.vn",    "role": "qc", "department": "Quality Control"},
         ]
         for acct in test_accounts:
             existing = db.query(models.User).filter(models.User.username == acct["username"]).first()
@@ -141,11 +149,12 @@ def create_default_admin():
         # Seed Default Role Permissions
         import json
         default_permissions = {
-            "admin": ["Dashboard & Thống kê", "QL Thông tin sản xuất", "Quản lý bán hàng", "Quản lý sản xuất", "Sản xuất (MES)", "Truy xuất nguồn gốc", "Quản trị hệ thống"],
+            "admin": ["Dashboard & Thống kê", "QL Thông tin sản xuất", "Quản lý bán hàng", "Quản lý sản xuất", "Sản xuất (MES)", "Truy xuất nguồn gốc", "Quản trị hệ thống", "Quản lý chất lượng"],
             "sales": ["Dashboard & Thống kê", "Quản lý bán hàng", "Truy xuất nguồn gốc"],
             "production": ["Sản xuất (MES)", "Truy xuất nguồn gốc"],
             "technical": ["Dashboard & Thống kê", "QL Thông tin sản xuất", "Quản lý sản xuất", "Truy xuất nguồn gốc"],
-            "planning": ["Dashboard & Thống kê", "Quản lý sản xuất", "Truy xuất nguồn gốc"]
+            "planning": ["Dashboard & Thống kê", "Quản lý sản xuất", "Truy xuất nguồn gốc"],
+            "qc": ["Dashboard & Thống kê", "Quản lý chất lượng", "Truy xuất nguồn gốc"]
         }
         
         for role_name, modules in default_permissions.items():

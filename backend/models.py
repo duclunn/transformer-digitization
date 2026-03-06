@@ -52,6 +52,11 @@ class SalesOrder(Base):
     deadline_date = Column(DateTime, nullable=True) # Added deadline date
     requirement_file = Column(String(500), nullable=True) # Uploaded requirement file path
     design_file = Column(String(500), nullable=True) # Uploaded design PDF file path
+    qc_b1_file = Column(String(500), nullable=True)
+    qc_b2_file = Column(String(500), nullable=True)
+    qc_kcs_file = Column(String(500), nullable=True)
+    qc_nghiem_thu_file = Column(String(500), nullable=True)
+    qc_xuat_xuong_file = Column(String(500), nullable=True)
     upload_log_id = Column(Integer, ForeignKey("excel_upload_logs.id"))
 
 class ProductionJob(Base):

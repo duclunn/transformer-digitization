@@ -8,8 +8,8 @@ import {
 import { UserPlus, Edit, Trash2, Mail, Shield, Briefcase, User as UserIcon } from 'lucide-react';
 import api from '../services/api';
 
-const ROLES = ['admin', 'sales', 'technical', 'production', 'planning'];
-const DEPARTMENTS = ['Admin', 'Sales', 'Technical', 'Production', 'Planning'];
+const ROLES = ['admin', 'sales', 'technical', 'production', 'planning', 'qc'];
+const DEPARTMENTS = ['Admin', 'Sales', 'Technical', 'Production', 'Planning', 'Quality Control'];
 
 // Helper to check if a user is online (active within last 2 minutes)
 // We append 'Z' to ensure JS parses the naive UTC timestamp correctly

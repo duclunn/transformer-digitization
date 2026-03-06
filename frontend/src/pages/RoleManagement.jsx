@@ -14,6 +14,7 @@ const ALL_MODULES = [
     "Sản xuất (MES)",
     "Truy xuất nguồn gốc",
     "Quản trị hệ thống",
+    "Quản lý chất lượng",
     "Data Upload"
 ];
 
@@ -23,7 +24,8 @@ const ROLE_NAMES = {
     "sales": "Nhân viên Kinh doanh (Sales)",
     "production": "Nhân viên Sản xuất (Production)",
     "planning": "Nhân viên Kế hoạch (Planning)",
-    "technical": "Nhân viên Kỹ thuật (Technical)"
+    "technical": "Nhân viên Kỹ thuật (Technical)",
+    "qc": "Quản lý chất lượng (QC)"
 };
 
 export default function RoleManagement() {
