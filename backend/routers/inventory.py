@@ -117,14 +117,27 @@ async def upload_materials_excel(file: UploadFile = File(...), db: Session = Dep
         cols = {str(c).strip().lower(): str(c) for c in df.columns}
         
         # Expected column mappings for Material
-        code_col = next((c for k, c in cols.items() if 'code' in k or 'mã vật tư' in k or 'mã' in k and 'old' not in k and 'cũ' not in k), None)
-        old_code_col = next((c for k, c in cols.items() if 'old code' in k or 'mã cũ' in k), None)
-        name_col = next((c for k, c in cols.items() if 'tên vật tư' in k or 'name' in k or 'tên' in k), None)
-        unit_col = next((c for k, c in cols.items() if 'đvt' in k or 'đơn vị' in k or 'unit' in k), None)
-        type_col = next((c for k, c in cols.items() if 'type' in k or 'loại' in k), None)
+        # Prioritize exact or strongly matching names first
+        def find_col(*keywords):
+            for k, original_col in cols.items():
+                if any(kw in k for kw in keywords):
+                    return original_col
+            return None
+
+        # Try to find Code, ignoring Old Code
+        code_col = None
+        for k, original_col in cols.items():
+            if ('code' in k or 'mã vật tư' in k or 'mã' in k) and ('old' not in k and 'cũ' not in k):
+                code_col = original_col
+                break
+        
+        old_code_col = find_col('old code', 'mã cũ')
+        name_col = find_col('tên vật tư', 'name', 'tên')
+        unit_col = find_col('đvt', 'đơn vị', 'unit')
+        type_col = find_col('type', 'loại')
         
         if not code_col or not name_col:
-            raise ValueError("Excel file must contain 'Code' (Mã vật tư) and 'Name' (Tên vật tư) columns.")
+            raise ValueError(f"Excel file must contain 'Code' and 'Name' columns. Found columns: {list(df.columns)}")
             
         success_count = 0
         df = df.fillna('')
